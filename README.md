@@ -20,7 +20,8 @@ Implementação inicial do backend serverless descrito no `PRD_SUPERADAR_V1.md`.
 3. Configure variáveis de ambiente.
 4. Exporte variáveis e execute:
    ```bash
-   python -m backend.app.main
+   python app.py
+   # ou: python -m backend.app.main
    ```
 
 ## Supabase keys (segurança)
