@@ -33,10 +33,12 @@ Após o deploy, teste `GET /health` para validar que o runtime Python subiu corr
 
 
 ## Resolver conflitos de merge no PR
-Se o GitHub mostrar conflitos com `main`, faça localmente:
+Se o GitHub mostrar conflitos com `main`, rode o script automatizado:
 ```bash
-git fetch origin
-git merge origin/main
-./scripts/resolve_conflicts.sh
+./scripts/sync_and_resolve_conflicts.sh origin main
 ```
-Depois revise o diff e finalize com commit de merge.
+Ele faz `fetch`, `merge`, resolve automaticamente os conflitos conhecidos do PR
+mantendo sua versão nos arquivos listados e cria o commit de merge.
+
+Se aparecerem conflitos fora da lista, o script para e mostra quais arquivos
+precisam de resolução manual.
