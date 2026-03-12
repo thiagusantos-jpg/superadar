@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from playwright.async_api import async_playwright
@@ -38,7 +39,9 @@ async def run() -> None:
             "url_concorrente, termo_busca e ean_produto."
         )
 
-    supabase_service = SupabaseService(settings.supabase_url, settings.supabase_key)
+    supabase_service = SupabaseService(
+        settings.supabase_url, settings.supabase_service_role_key
+    )
     telegram_service = TelegramService(settings.telegram_token, settings.telegram_chat_id)
 
     async with async_playwright() as playwright:
@@ -54,7 +57,8 @@ async def run() -> None:
                 ean_produto=alvo.ean_produto,
                 print_dir=Path("prints"),
             )
-            remote_path = f"prints/{captura.local_screenshot.name}"
+            timestamp_utc = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+            remote_path = f"prints/{alvo.ean_produto}_{timestamp_utc}.png"
             url_publica = supabase_service.upload_print(
                 bucket="prints_concorrentes",
                 local_file_path=captura.local_screenshot,

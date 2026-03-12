@@ -7,7 +7,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Settings:
     supabase_url: str
-    supabase_key: str
+    supabase_service_role_key: str
     telegram_token: str
     telegram_chat_id: str
     endereco_loja: str = "R. Marinho Falcão, 55 - Vila Madalena, São Paulo"
@@ -17,7 +17,7 @@ class Settings:
     def from_env(cls) -> "Settings":
         required_keys = [
             "SUPABASE_URL",
-            "SUPABASE_KEY",
+            "SUPABASE_SERVICE_ROLE_KEY",
             "TELEGRAM_TOKEN",
             "TELEGRAM_CHAT_ID",
         ]
@@ -28,7 +28,7 @@ class Settings:
 
         return cls(
             supabase_url=os.environ["SUPABASE_URL"],
-            supabase_key=os.environ["SUPABASE_KEY"],
+            supabase_service_role_key=os.environ["SUPABASE_SERVICE_ROLE_KEY"],
             telegram_token=os.environ["TELEGRAM_TOKEN"],
             telegram_chat_id=os.environ["TELEGRAM_CHAT_ID"],
             endereco_loja=os.getenv(

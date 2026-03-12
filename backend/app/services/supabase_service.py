@@ -10,12 +10,19 @@ class SupabaseService:
     def __init__(self, url: str, key: str) -> None:
         self.client: Client = create_client(url, key)
 
-    def upload_print(self, bucket: str, local_file_path: Path, remote_path: str) -> str:
+    def upload_print(
+        self,
+        bucket: str,
+        local_file_path: Path,
+        remote_path: str,
+        *,
+        upsert: bool = True,
+    ) -> str:
         with local_file_path.open("rb") as file_handle:
             self.client.storage.from_(bucket).upload(
                 path=remote_path,
                 file=file_handle,
-                file_options={"content-type": "image/png", "upsert": "true"},
+                file_options={"content-type": "image/png", "upsert": str(upsert).lower()},
             )
 
         return self.client.storage.from_(bucket).get_public_url(remote_path)
