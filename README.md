@@ -30,3 +30,13 @@ Siga `supabase/README.md` para aplicar migration e seed.
 ## Deploy na Vercel
 Para evitar erro de entrypoint, o projeto inclui `main.py` (WSGI) na raiz.
 Após o deploy, teste `GET /health` para validar que o runtime Python subiu corretamente.
+
+
+## Resolver conflitos de merge no PR
+Se o GitHub mostrar conflitos com `main`, faça localmente:
+```bash
+git fetch origin
+git merge origin/main
+./scripts/resolve_conflicts.sh
+```
+Depois revise o diff e finalize com commit de merge.
