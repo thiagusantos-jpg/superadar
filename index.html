@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SuperRadar | Dashboard de Pricing</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/js/all.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-20">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold">SuperRadar</h1>
+        <p class="text-sm text-slate-500">Inteligência de pricing e prova visual de mercado</p>
+      </div>
+      <div class="flex items-center gap-2 text-xs">
+        <span id="connection-badge" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+          <i class="fa-solid fa-plug-circle-xmark"></i>
+          Configuração pendente
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto p-4 sm:p-6 space-y-6">
+    <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <article class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <p class="text-xs uppercase text-slate-500">Pendências</p>
+        <p id="kpi-pendencias" class="text-3xl font-semibold mt-2">--</p>
+      </article>
+      <article class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <p class="text-xs uppercase text-slate-500">Abaixo do mercado</p>
+        <p id="kpi-abaixo" class="text-3xl font-semibold mt-2">--</p>
+      </article>
+      <article class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <p class="text-xs uppercase text-slate-500">Maior diferença (R$)</p>
+        <p id="kpi-gap" class="text-3xl font-semibold mt-2">--</p>
+      </article>
+      <article class="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <p class="text-xs uppercase text-slate-500">Última atualização</p>
+        <p id="kpi-last-update" class="text-lg font-semibold mt-2">--</p>
+      </article>
+    </section>
+
+    <section class="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 shadow-sm">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <h2 class="text-lg font-semibold">Fila de revisão de preços</h2>
+        <div class="flex gap-2">
+          <button id="btn-refresh" class="px-3 py-2 rounded-md bg-slate-900 text-white text-sm hover:bg-slate-700">
+            <i class="fa-solid fa-rotate"></i> Atualizar
+          </button>
+        </div>
+      </div>
+
+      <div id="status-box" class="hidden mb-4 text-sm rounded-md px-3 py-2"></div>
+      <div id="loading" class="text-sm text-slate-500">Carregando dados...</div>
+      <div id="cards" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
+    </section>
+  </main>
+
+  <div id="modal" class="hidden fixed inset-0 z-50 bg-black/80 p-4 items-center justify-center">
+    <div class="relative max-w-4xl w-full bg-white rounded-xl p-3">
+      <button id="modal-close" class="absolute top-2 right-2 w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300">&times;</button>
+      <img id="modal-image" src="" alt="Prova visual" class="w-full rounded-lg max-h-[80vh] object-contain" />
+    </div>
+  </div>
+
+  <script>
+    window.SUPERADAR_CONFIG = window.SUPERADAR_CONFIG || {
+      SUPABASE_URL: "",
+      SUPABASE_ANON_KEY: ""
+    };
+
+    const state = {
+      pendingItems: [],
+      marketByEan: new Map(),
+    };
+
+    const fmtMoney = (value) => Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const fmtDate = (value) => value ? new Date(value).toLocaleString("pt-BR") : "--";
+
+    const $ = (id) => document.getElementById(id);
+
+    function setStatus(message, type = "info") {
+      const box = $("status-box");
+      box.className = "mb-4 text-sm rounded-md px-3 py-2";
+      if (type === "error") box.classList.add("bg-red-100", "text-red-700");
+      else if (type === "success") box.classList.add("bg-emerald-100", "text-emerald-700");
+      else box.classList.add("bg-slate-100", "text-slate-700");
+      box.textContent = message;
+      box.classList.remove("hidden");
+    }
+
+    function setConnectionBadge(isConnected) {
+      const badge = $("connection-badge");
+      if (isConnected) {
+        badge.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700";
+        badge.innerHTML = '<i class="fa-solid fa-plug-circle-check"></i> Supabase conectado';
+      } else {
+        badge.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-700";
+        badge.innerHTML = '<i class="fa-solid fa-plug-circle-xmark"></i> Configuração pendente';
+      }
+    }
+
+    function openModal(url) {
+      if (!url) return;
+      $("modal-image").src = url;
+      $("modal").classList.remove("hidden");
+      $("modal").classList.add("flex");
+    }
+
+    function closeModal() {
+      $("modal").classList.add("hidden");
+      $("modal").classList.remove("flex");
+      $("modal-image").src = "";
+    }
+
+    function calculateMarginPercent(cost, sell) {
+      const c = Number(cost || 0);
+      const s = Number(sell || 0);
+      if (!s) return 0;
+      return ((s - c) / s) * 100;
+    }
+
+    function renderKPIs() {
+      const items = state.pendingItems;
+      $("kpi-pendencias").textContent = items.length;
+
+      const belowMarket = items.filter((item) => {
+        const market = state.marketByEan.get(item.produtos?.ean);
+        return market && Number(market.preco_detectado) < Number(item.produtos?.preco_venda_atual);
+      }).length;
+      $("kpi-abaixo").textContent = belowMarket;
+
+      const biggestGap = items.reduce((max, item) => {
+        const market = state.marketByEan.get(item.produtos?.ean);
+        if (!market) return max;
+        const gap = Number(item.produtos?.preco_venda_atual || 0) - Number(market.preco_detectado || 0);
+        return Math.max(max, gap);
+      }, 0);
+      $("kpi-gap").textContent = fmtMoney(biggestGap);
+
+      const latest = [...state.marketByEan.values()].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+      $("kpi-last-update").textContent = fmtDate(latest?.created_at);
+    }
+
+    function generatePDF(item, market) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      const productName = item.produtos?.nome || "Produto";
+      const cost = Number(item.produtos?.preco_custo || 0);
+      const currentSell = Number(item.produtos?.preco_venda_atual || 0);
+      const marketPrice = Number(market?.preco_detectado || 0);
+      const suggested = Number(item.preco_sugerido || 0);
+      const currentMargin = calculateMarginPercent(cost, currentSell);
+      const suggestedMargin = calculateMarginPercent(cost, suggested);
+
+      doc.setFontSize(14);
+      doc.text("SuperRadar - Relatório de Negociação", 14, 18);
+      doc.setFontSize(10);
+      doc.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 14, 24);
+
+      doc.autoTable({
+        startY: 30,
+        head: [["Produto", "Custo", "Venda Atual", "Mercado", "Sugerido", "Margem Atual", "Margem Sugerida"]],
+        body: [[
+          productName,
+          fmtMoney(cost),
+          fmtMoney(currentSell),
+          fmtMoney(marketPrice),
+          fmtMoney(suggested),
+          `${currentMargin.toFixed(2)}%`,
+          `${suggestedMargin.toFixed(2)}%`
+        ]]
+      });
+
+      doc.setFontSize(11);
+      doc.text(`Motivo: ${item.motivo || "N/A"}`, 14, doc.lastAutoTable.finalY + 10);
+      doc.save(`Negociacao_${(item.produtos?.ean || "produto")}.pdf`);
+    }
+
+    function renderCards() {
+      const list = $("cards");
+      list.innerHTML = "";
+
+      if (!state.pendingItems.length) {
+        list.innerHTML = '<div class="text-sm text-slate-500">Nenhuma pendência encontrada.</div>';
+        return;
+      }
+
+      state.pendingItems.forEach((item) => {
+        const market = state.marketByEan.get(item.produtos?.ean);
+        const currentPrice = Number(item.produtos?.preco_venda_atual || 0);
+        const marketPrice = Number(market?.preco_detectado || 0);
+        const delta = currentPrice - marketPrice;
+
+        const card = document.createElement("article");
+        card.className = "rounded-xl border border-slate-200 p-4";
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h3 class="font-semibold text-base">${item.produtos?.nome || "Produto sem nome"}</h3>
+              <p class="text-xs text-slate-500 mt-1">EAN: ${item.produtos?.ean || "--"}</p>
+            </div>
+            <span class="text-xs px-2 py-1 rounded-full ${delta > 0 ? "bg-red-100 text-red-700" : "bg-emerald-100 text-emerald-700"}">
+              ${delta > 0 ? "Atenção" : "OK"}
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 text-sm mt-4">
+            <p class="text-slate-500">Seu preço</p><p class="font-medium text-right">${fmtMoney(currentPrice)}</p>
+            <p class="text-slate-500">Mercado</p><p class="font-medium text-right">${fmtMoney(marketPrice)}</p>
+            <p class="text-slate-500">Sugestão</p><p class="font-medium text-right">${fmtMoney(item.preco_sugerido)}</p>
+            <p class="text-slate-500">Diferença</p><p class="font-medium text-right ${delta > 0 ? "text-red-600" : "text-emerald-600"}">${fmtMoney(delta)}</p>
+          </div>
+
+          <p class="text-xs text-slate-600 mt-3 bg-slate-100 rounded-md p-2">${item.motivo || "Sem motivo informado"}</p>
+
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button class="btn-proof px-3 py-2 rounded-md bg-blue-600 text-white text-sm hover:bg-blue-500" ${market?.url_print ? "" : "disabled"}>
+              <i class="fa-solid fa-eye"></i> Prova visual
+            </button>
+            <button class="btn-pdf px-3 py-2 rounded-md bg-rose-100 text-rose-700 text-sm hover:bg-rose-200">
+              <i class="fa-solid fa-file-pdf"></i> PDF fornecedor
+            </button>
+          </div>
+        `;
+
+        card.querySelector(".btn-proof").addEventListener("click", () => openModal(market?.url_print));
+        card.querySelector(".btn-pdf").addEventListener("click", () => generatePDF(item, market));
+
+        list.appendChild(card);
+      });
+    }
+
+    async function loadData() {
+      const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.SUPERADAR_CONFIG;
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        setConnectionBadge(false);
+        $("loading").classList.add("hidden");
+        setStatus("Configure SUPABASE_URL e SUPABASE_ANON_KEY no script do index.html para carregar dados reais.", "error");
+        return;
+      }
+
+      setConnectionBadge(true);
+      setStatus("Sincronizando dados do Supabase...", "info");
+
+      try {
+        const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const [{ data: pending, error: pendingError }, { data: market, error: marketError }] = await Promise.all([
+          client
+            .from("fila_precos_pendentes")
+            .select(`
+              id,
+              created_at,
+              status,
+              preco_sugerido,
+              motivo,
+              produto_id,
+              produtos (
+                nome,
+                ean,
+                preco_custo,
+                preco_venda_atual
+              )
+            `)
+            .eq("status", "pendente")
+            .order("created_at", { ascending: false })
+            .limit(100),
+          client
+            .from("historico_mercado")
+            .select("ean, preco_detectado, url_print, created_at")
+            .order("created_at", { ascending: false })
+            .limit(500)
+        ]);
+
+        if (pendingError) throw pendingError;
+        if (marketError) throw marketError;
+
+        const byEan = new Map();
+        for (const row of market || []) {
+          if (!byEan.has(row.ean)) byEan.set(row.ean, row);
+        }
+
+        state.pendingItems = pending || [];
+        state.marketByEan = byEan;
+
+        renderKPIs();
+        renderCards();
+        setStatus("Dados carregados com sucesso.", "success");
+      } catch (error) {
+        console.error(error);
+        setStatus(`Falha ao carregar dados: ${error.message || error}`, "error");
+      } finally {
+        $("loading").classList.add("hidden");
+      }
+    }
+
+    $("btn-refresh").addEventListener("click", () => {
+      $("loading").classList.remove("hidden");
+      loadData();
+    });
+
+    $("modal-close").addEventListener("click", closeModal);
+    $("modal").addEventListener("click", (e) => {
+      if (e.target.id === "modal") closeModal();
+    });
+
+    loadData();
+  </script>
+</body>
+</html>

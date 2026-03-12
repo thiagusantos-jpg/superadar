@@ -42,3 +42,18 @@ mantendo sua versão nos arquivos listados e cria o commit de merge.
 
 Se aparecerem conflitos fora da lista, o script para e mostra quais arquivos
 precisam de resolução manual.
+
+
+## Frontend (Dashboard)
+O dashboard está em `index.html` e segue o PRD (Tailwind + HTML puro + modal de prova visual + PDF).
+
+### Configuração rápida
+1. Abra `index.html`.
+2. No bloco `window.SUPERADAR_CONFIG`, informe:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY` (publishable key)
+3. Publique na Vercel como projeto estático.
+
+### Observações de segurança
+- **Nunca** use `service_role key` no frontend.
+- O frontend deve usar apenas chave publishable/anon.
